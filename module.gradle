@@ -1,0 +1,4 @@
+def module_version = [:]
+module_version.code = 1
+module_version.name = "1.0.0"
+ext.module_version = module_version

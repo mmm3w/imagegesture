@@ -1,0 +1,75 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  push:
+    tags:
+      - '*'
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      - name: Setup Java JDK
+        uses: actions/setup-java@v2.3.0
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+
+      - name: Setup Android SDK Tools
+        uses: android-actions/setup-android@v2.0.2
+
+      - uses: actions/setup-python@v2.2.2
+
+      - name: Check armory for compile
+        uses: actions/checkout@v2
+        with:
+          repository: mmm3w/armory
+
+      - name: Check maven repo
+        uses: actions/checkout@v2
+        with:
+          repository: mmm3w/maven
+          path: maven
+          persist-credentials: false
+          fetch-depth: 0
+
+      - run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: Checks-out self
+        uses: actions/checkout@v2
+        with:
+          path: imagegesture
+
+      - run: echo "include ':imagegesture'" > settings.gradle
+      - run: chmod +x ./gradlew
+      - run: ./gradlew :imagegesture:uploadArchives
+
+      - name: Update readme and commit
+        working-directory: ./maven
+        run: |
+          export VER=`grep "name" ../imagegesture/module.gradle | cut -d "\"" -f 2`
+          python ../rmc.py ./README.md "implementation 'com.mitsuki.armory:imagegesture:$VER'" imagegesture:
+          git config user.name Mitsuki
+          git config user.email psnhewzc@gmail.com
+          git add .
+          git commit -m "new version: imagegesture:$VER"
+
+      - name: Push lib
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.PUSH_KEY }}
+          branch: main
+          directory: maven
+          repository: mmm3w/maven
