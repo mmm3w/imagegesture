@@ -62,7 +62,7 @@ jobs:
           export VER=`grep "name" ../imagegesture/module.gradle | cut -d "\"" -f 2`
           python ../rmc.py ./README.md "implementation 'com.mitsuki.armory:imagegesture:$VER'" imagegesture:
           git config user.name Mitsuki
-          git config user.email psnhewzc@gmail.com
+          git config user.email 26341548+mmm3w@users.noreply.github.com
           git add .
           git commit -m "new version: imagegesture:$VER"
 
