@@ -32,10 +32,15 @@ jobs:
 
       - uses: actions/setup-python@v2.2.2
 
-      - name: Check armory for compile
+      - name: Checks-out self
         uses: actions/checkout@v2
-        with:
-          repository: mmm3w/armory
+#        with:
+#          path: imagegesture
+#
+#      - name: Check armory for compile
+#        uses: actions/checkout@v2
+#        with:
+#          repository: mmm3w/armory
 
       - name: Check maven repo
         uses: actions/checkout@v2
@@ -47,14 +52,8 @@ jobs:
 
       - run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
-      - name: Checks-out self
-        uses: actions/checkout@v2
-        with:
-          path: imagegesture
-
-      - run: echo "include ':imagegesture'" > settings.gradle
       - run: chmod +x ./gradlew
-      - run: ./gradlew :imagegesture:uploadArchives
+      - run: ./gradlew :imagegesture:publishReleasePublicationToMavenRepository
 
       - name: Update readme and commit
         working-directory: ./maven

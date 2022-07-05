@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Matrix
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
+import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
@@ -25,25 +26,45 @@ open class ImageGesture(protected val mImageView: ImageView) : AllGesture(), Vie
             initBase()
         }
 
+    var maxScale: Float = 3f
+        set(value) {
+            if (value != field) {
+                if (value < minScale) throw IllegalArgumentException()
+                field = value
+            }
+        }
+    var minScale: Float = 0.5f
+        set(value) {
+            if (value != field) {
+                if (value > maxScale) throw IllegalArgumentException()
+                field = value
+            }
+        }
+
+    var autoScaleGradient: FloatArray = floatArrayOf()
+
+
     private val mDrawMatrix = Matrix()
     private val mBaseMatrix = Matrix()
     private val mDecoMatrix = Matrix()
     private val mDisplayRect = RectF()
     private val mMatrixValues = FloatArray(9)
 
-    private var mScaleUpAnimation: Animation? = null
-    private var mScaleDownAnimation: Animation? = null
+    //    private var mScaleUpAnimation: Animation? = null
+//    private var mScaleDownAnimation: Animation? = null
+    private var mAutoScaleAnimation: Animation? = null
 
     //启用mSlideType阈值，除非超过阈值，否则都为NONE mode
     private var mScaleThreshold = 0.0f
 
+    private var mCurrentScaleGradient = -1
 
     private val mCurrentFlingRunnable = FlingAnimation()
     private val mScaleGestureDetector = ScaleGestureDetector(mImageView.context, this)
     private val mGestureDetector = GestureDetector(mImageView.context, this)
 
+
     companion object {
-        private const val MAX_SCALE = 3.0f
         private const val SCALE_DURATION = 300
     }
 
@@ -58,10 +79,11 @@ open class ImageGesture(protected val mImageView: ImageView) : AllGesture(), Vie
         return detector.run {
             var handled = false
             val currentScale = mDecoMatrix.getScale()
-            if (scaleFactor > 1f && currentScale < MAX_SCALE) {
-                if (currentScale * scaleFactor > MAX_SCALE) {
+
+            if (scaleFactor > 1f && currentScale < maxScale) {
+                if (currentScale * scaleFactor > maxScale) {
                     mDecoMatrix.postScale(
-                        MAX_SCALE / currentScale, MAX_SCALE / currentScale,
+                        maxScale / currentScale, maxScale / currentScale,
                         focusX, focusY
                     )
                 } else {
@@ -71,16 +93,19 @@ open class ImageGesture(protected val mImageView: ImageView) : AllGesture(), Vie
                 handled = true
             }
 
-            if (scaleFactor < 1f && currentScale > 1f) {
-                if (currentScale * scaleFactor < 1f) {
+            if (scaleFactor < 1f && currentScale > minScale) {
+                if (currentScale * scaleFactor < minScale) {
                     mDecoMatrix.postScale(
-                        1f / currentScale, 1f / currentScale, focusX, focusY
+                        minScale / currentScale, minScale / currentScale, focusX, focusY
                     )
                 } else {
                     mDecoMatrix.postScale(scaleFactor, scaleFactor, focusX, focusY)
                 }
                 updateImageMatrix()
                 handled = true
+            }
+            if (handled) {
+                mCurrentScaleGradient = autoScaleGradient.size
             }
             handled
         }
@@ -147,13 +172,15 @@ open class ImageGesture(protected val mImageView: ImageView) : AllGesture(), Vie
 
     final override fun onDoubleTap(e: MotionEvent): Boolean {
         e.apply {
-            val currentScale = mDecoMatrix.getScale()
-            if (currentScale > 1f) {
-                if (!mScaleDownAnimation.isAnimationRunning())
-                    mScaleDownAnimation = startScaleDown(e.x, e.y, currentScale)
-            } else {
-                if (!mScaleUpAnimation.isAnimationRunning())
-                    mScaleUpAnimation = startScaleUp(e.x, e.y, currentScale)
+            if (!mAutoScaleAnimation.isAnimationRunning()) {
+                val currentScale = mDecoMatrix.getScale()
+                pushGradient()
+                val targetScale =
+                    if (mCurrentScaleGradient == -1) 1f else autoScaleGradient[mCurrentScaleGradient]
+                if (targetScale != currentScale) {
+                    mAutoScaleAnimation =
+                        startAutoScaleAnimation(e.x, e.y, currentScale, targetScale)
+                }
             }
         }
         return true
@@ -302,28 +329,11 @@ open class ImageGesture(protected val mImageView: ImageView) : AllGesture(), Vie
         mDecoMatrix.postTranslate(offsetX, offsetY)
     }
 
-    private fun startScaleUp(px: Float, py: Float, start: Float): Animation {
+    private fun startAutoScaleAnimation(px: Float, py: Float, from: Float, to: Float): Animation {
         return object : Animation() {
             override fun applyTransformation(interpolatedTime: Float, t: Transformation) {
                 val currentScale = mDecoMatrix.getScale()
-                val targetScale = (MAX_SCALE - start) * interpolatedTime + start
-                mDecoMatrix.postScale(
-                    targetScale / currentScale, targetScale / currentScale, px, py
-                )
-                updateImageMatrix()
-            }
-        }.apply {
-            duration = SCALE_DURATION.toLong()
-            mImageView.clearAnimation()
-            mImageView.startAnimation(this)
-        }
-    }
-
-    private fun startScaleDown(px: Float, py: Float, start: Float): Animation {
-        return object : Animation() {
-            override fun applyTransformation(interpolatedTime: Float, t: Transformation) {
-                val currentScale = mDecoMatrix.getScale()
-                val targetScale = start - (start - 1f) * interpolatedTime
+                val targetScale = from + (to - from) * interpolatedTime
                 mDecoMatrix.postScale(
                     targetScale / currentScale, targetScale / currentScale,
                     px, py
@@ -334,6 +344,13 @@ open class ImageGesture(protected val mImageView: ImageView) : AllGesture(), Vie
             duration = SCALE_DURATION.toLong()
             mImageView.clearAnimation()
             mImageView.startAnimation(this)
+        }
+    }
+
+    private fun pushGradient() {
+        mCurrentScaleGradient++
+        if (mCurrentScaleGradient >= autoScaleGradient.size) {
+            mCurrentScaleGradient = -1
         }
     }
 
